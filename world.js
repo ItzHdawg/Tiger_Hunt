@@ -70,7 +70,7 @@ class World {
     }
     
     drawWorldBounds(ctx, cameraX, cameraY, canvasWidth, canvasHeight) {
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
         ctx.lineWidth = 2;
         
         const left = 0 - cameraX;
@@ -101,17 +101,21 @@ class World {
         // Draw huts on minimap
         ctx.fillStyle = '#FFD700';
         for (let hut of huts.huts) {
-            const x = minimapX + hut.x * scaleX;
-            const y = minimapY + hut.y * scaleY;
-            ctx.fillRect(x - 2, y - 2, 4, 4);
+            if (hut) {
+                const x = minimapX + hut.x * scaleX;
+                const y = minimapY + hut.y * scaleY;
+                ctx.fillRect(x - 2, y - 2, 4, 4);
+            }
         }
         
         // Draw wolves on minimap
         ctx.fillStyle = '#FF4444';
         for (let wolf of wolves.wolves) {
-            const x = minimapX + wolf.x * scaleX;
-            const y = minimapY + wolf.y * scaleY;
-            ctx.fillRect(x - 1, y - 1, 2, 2);
+            if (wolf && wolf.isAlive()) {
+                const x = minimapX + wolf.x * scaleX;
+                const y = minimapY + wolf.y * scaleY;
+                ctx.fillRect(x - 1, y - 1, 2, 2);
+            }
         }
         
         // Draw player on minimap

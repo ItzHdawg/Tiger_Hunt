@@ -8,7 +8,7 @@ class LevelManager {
     }
     
     initialize(level) {
-        this.currentLevel = level;
+        this.currentLevel = Math.max(1, Math.min(level, this.maxLevel));
         this.levelStartTime = Date.now();
         this.wolvesDespawned = 0;
     }
@@ -39,31 +39,29 @@ class LevelManager {
     
     adjustDifficultyByLevel(wolfManager) {
         // Adjust wolf spawn rate and speed based on level
-        wolfManager.spawnRate = CONFIG.WOLF_SPAWN_RATE - (this.currentLevel - 1) * 0.2;
-        wolfManager.spawnRate = Math.max(0.5, wolfManager.spawnRate); // Min 0.5 seconds
-        
-        // Increase max wolf count per level
-        const maxWolves = CONFIG.MAX_WOLVES + (this.currentLevel - 1) * 3;
+        wolfManager.spawnRate = Math.max(0.5, CONFIG.WOLF_SPAWN_RATE - (this.currentLevel - 1) * 0.2);
         
         // Update wolf speeds for existing wolves
         for (let wolf of wolfManager.wolves) {
-            wolf.speed = CONFIG.WOLF_SPEED + (this.currentLevel - 1) * 20;
+            if (wolf) {
+                wolf.speed = CONFIG.WOLF_SPEED + (this.currentLevel - 1) * 20;
+            }
         }
     }
     
     getWolvesRequiredForLevel(level) {
-        return 5 + (level - 1) * 3; // 5, 8, 11, 14, 17 wolves
+        return Math.max(5, 5 + (level - 1) * 3);
     }
     
     recordWolfDefeated(points = 10) {
-        this.score += points;
+        this.score += Math.max(0, points);
         this.wolvesDespawned++;
     }
     
     getLevelProgress() {
         const required = this.getWolvesRequiredForLevel(this.currentLevel);
-        const progress = Math.min(this.wolvesDespawned, required);
-        return progress / required;
+        const progress = Math.max(0, Math.min(this.wolvesDespawned, required));
+        return progress / Math.max(1, required);
     }
     
     getElapsedTime() {

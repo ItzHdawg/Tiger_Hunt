@@ -19,6 +19,9 @@ class Survival {
     update(deltaTime, player, inHut) {
         if (!this.isAlive) return;
         
+        // Clamp deltaTime to prevent huge jumps
+        deltaTime = Math.min(deltaTime, 0.033);
+        
         // Hunger depletes over time
         this.hunger -= CONFIG.HUNGER_DECAY_RATE * deltaTime;
         this.hunger = Math.max(0, this.hunger);
@@ -28,7 +31,7 @@ class Survival {
         this.thirst = Math.max(0, this.thirst);
         
         // Stamina regeneration/depletion
-        if (player.isSprinting) {
+        if (player.isSprinting && this.stamina > 0) {
             this.stamina -= CONFIG.STAMINA_DRAIN_RATE * deltaTime;
             this.stamina = Math.max(0, this.stamina);
         } else {
@@ -40,18 +43,18 @@ class Survival {
         this.isExhausted = this.stamina <= 0;
         
         // Health affected by hunger/thirst
-        if (this.hunger === 0) {
+        if (this.hunger <= 0) {
             this.health -= 0.5 * deltaTime;
         }
-        if (this.thirst === 0) {
+        if (this.thirst <= 0) {
             this.health -= 1 * deltaTime;
         }
         
-        // Health damage from extreme hunger/thirst
-        if (this.hunger < 20) {
+        // Health damage from extreme hunger/thirst (don't double damage)
+        if (this.hunger > 0 && this.hunger < 20) {
             this.health -= 0.2 * deltaTime;
         }
-        if (this.thirst < 20) {
+        if (this.thirst > 0 && this.thirst < 20) {
             this.health -= 0.3 * deltaTime;
         }
         
@@ -63,6 +66,8 @@ class Survival {
     }
     
     takeDamage(amount) {
+        if (!this.isAlive) return false;
+        
         this.health -= amount;
         if (this.health <= 0) {
             this.isAlive = false;
@@ -84,18 +89,18 @@ class Survival {
     }
     
     getHealthPercentage() {
-        return this.health / this.maxHealth;
+        return Math.max(0, Math.min(1, this.health / this.maxHealth));
     }
     
     getHungerPercentage() {
-        return this.hunger / this.maxHunger;
+        return Math.max(0, Math.min(1, this.hunger / this.maxHunger));
     }
     
     getThirstPercentage() {
-        return this.thirst / this.maxThirst;
+        return Math.max(0, Math.min(1, this.thirst / this.maxThirst));
     }
     
     getStaminaPercentage() {
-        return this.stamina / this.maxStamina;
+        return Math.max(0, Math.min(1, this.stamina / this.maxStamina));
     }
 }

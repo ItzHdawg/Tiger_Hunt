@@ -1,40 +1,55 @@
 class Game {
     constructor() {
-        this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
-        
-        // Set canvas size
-        this.canvas.width = CONFIG.CANVAS_WIDTH;
-        this.canvas.height = CONFIG.CANVAS_HEIGHT;
-        
-        // Initialize game systems
-        this.player = new Player();
-        this.survival = new Survival();
-        this.wolfs = new WolfManager();
-        this.huts = new HutManager();
-        this.world = new World();
-        this.ui = new UI(this.canvas.width, this.canvas.height);
-        this.weather = new Weather();
-        this.levels = new LevelManager();
-        
-        // Game state
-        this.isRunning = true;
-        this.lastFrameTime = Date.now();
-        this.fps = 0;
-        this.frameCount = 0;
-        this.inHut = false;
-        
-        // Event listeners
-        window.addEventListener('keydown', (e) => this.handleKeyDown(e));
-        window.addEventListener('keyup', (e) => this.handleKeyUp(e));
-        
-        // Start game
-        this.levels.initialize(1);
-        this.gameLoop();
+        try {
+            this.canvas = document.getElementById('gameCanvas');
+            if (!this.canvas) {
+                console.error('Canvas element not found!');
+                return;
+            }
+            
+            this.ctx = this.canvas.getContext('2d');
+            if (!this.ctx) {
+                console.error('Could not get 2D context!');
+                return;
+            }
+            
+            // Set canvas size
+            this.canvas.width = CONFIG.CANVAS_WIDTH;
+            this.canvas.height = CONFIG.CANVAS_HEIGHT;
+            
+            // Initialize game systems
+            this.player = new Player();
+            this.survival = new Survival();
+            this.wolfs = new WolfManager();
+            this.huts = new HutManager();
+            this.world = new World();
+            this.ui = new UI(this.canvas.width, this.canvas.height);
+            this.weather = new Weather();
+            this.levels = new LevelManager();
+            
+            // Game state
+            this.isRunning = true;
+            this.lastFrameTime = Date.now();
+            this.fps = 0;
+            this.frameCount = 0;
+            this.inHut = false;
+            
+            // Event listeners
+            window.addEventListener('keydown', (e) => this.handleKeyDown(e));
+            window.addEventListener('keyup', (e) => this.handleKeyUp(e));
+            
+            // Start game
+            this.levels.initialize(1);
+            this.gameLoop();
+        } catch (error) {
+            console.error('Failed to initialize game:', error);
+        }
     }
     
     handleKeyDown(event) {
-        this.player.handleKeyDown(event);
+        if (this.player) {
+            this.player.handleKeyDown(event);
+        }
         
         // Debug toggle
         if (event.key === 'D' || event.key === 'd') {
@@ -43,11 +58,13 @@ class Game {
     }
     
     handleKeyUp(event) {
-        this.player.handleKeyUp(event);
+        if (this.player) {
+            this.player.handleKeyUp(event);
+        }
     }
     
     update(deltaTime) {
-        if (!this.isRunning) return;
+        if (!this.isRunning || !this.player) return;
         
         // Update player
         this.player.update(deltaTime, this.survival);
@@ -77,6 +94,8 @@ class Game {
     }
     
     render() {
+        if (!this.ctx) return;
+        
         // Draw world
         const camera = this.world.draw(
             this.ctx, 
@@ -127,22 +146,32 @@ class Game {
         y += 15;
         
         this.ctx.fillText(`Score: ${this.levels.score}`, 10, y);
+        y += 15;
+        
+        this.ctx.fillText(`Health: ${this.survival.health.toFixed(1)}`, 10, y);
+        y += 15;
+        
+        this.ctx.fillText(`Hunger: ${this.survival.hunger.toFixed(1)}`, 10, y);
     }
     
     gameLoop() {
-        const now = Date.now();
-        const deltaTime = Math.min((now - this.lastFrameTime) / 1000, 0.016); // Cap at 60fps
-        this.lastFrameTime = now;
-        
-        // Calculate FPS
-        this.frameCount++;
-        if (this.frameCount % 60 === 0) {
-            this.fps = 1 / deltaTime;
+        try {
+            const now = Date.now();
+            const deltaTime = Math.min((now - this.lastFrameTime) / 1000, 0.033); // Cap at 60fps
+            this.lastFrameTime = now;
+            
+            // Calculate FPS
+            this.frameCount++;
+            if (this.frameCount % 60 === 0) {
+                this.fps = 1 / (deltaTime > 0 ? deltaTime : 0.016);
+            }
+            
+            // Update and render
+            this.update(deltaTime);
+            this.render();
+        } catch (error) {
+            console.error('Error in game loop:', error);
         }
-        
-        // Update and render
-        this.update(deltaTime);
-        this.render();
         
         // Continue loop
         requestAnimationFrame(() => this.gameLoop());
@@ -151,5 +180,9 @@ class Game {
 
 // Start game when page loads
 window.addEventListener('load', () => {
-    new Game();
+    try {
+        new Game();
+    } catch (error) {
+        console.error('Failed to start game:', error);
+    }
 });

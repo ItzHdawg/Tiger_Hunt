@@ -8,6 +8,9 @@ class UI {
     }
     
     draw(ctx, survival, level, wolfCount, weather) {
+        // Save context state
+        ctx.save();
+        
         // Draw stat bars
         this.drawStatBars(ctx, survival);
         
@@ -27,6 +30,9 @@ class UI {
         if (!survival.isAlive) {
             this.drawGameOver(ctx);
         }
+        
+        // Restore context state
+        ctx.restore();
     }
     
     drawStatBars(ctx, survival) {
@@ -35,32 +41,35 @@ class UI {
         
         // Health bar
         this.drawBar(ctx, startX, startY, this.barWidth, this.barHeight, 
-                     survival.health / survival.maxHealth, '#FF6B6B', 'Health');
+                     survival.getHealthPercentage(), '#FF6B6B', 'Health');
         startY += this.barHeight + 10;
         
         // Hunger bar
         this.drawBar(ctx, startX, startY, this.barWidth, this.barHeight, 
-                     survival.hunger / survival.maxHunger, '#FFD700', 'Hunger');
+                     survival.getHungerPercentage(), '#FFD700', 'Hunger');
         startY += this.barHeight + 10;
         
         // Thirst bar
         this.drawBar(ctx, startX, startY, this.barWidth, this.barHeight, 
-                     survival.thirst / survival.maxThirst, '#4A90E2', 'Thirst');
+                     survival.getThirstPercentage(), '#4A90E2', 'Thirst');
         startY += this.barHeight + 10;
         
         // Stamina bar
         this.drawBar(ctx, startX, startY, this.barWidth, this.barHeight, 
-                     survival.stamina / survival.maxStamina, '#7ED321', 'Stamina');
+                     survival.getStaminaPercentage(), '#7ED321', 'Stamina');
     }
     
     drawBar(ctx, x, y, width, height, percentage, color, label) {
+        // Ensure percentage is valid
+        percentage = Math.max(0, Math.min(1, percentage));
+        
         // Background
         ctx.fillStyle = '#333';
         ctx.fillRect(x, y, width, height);
         
         // Foreground
         ctx.fillStyle = color;
-        ctx.fillRect(x, y, width * Math.max(0, Math.min(1, percentage)), height);
+        ctx.fillRect(x, y, width * percentage, height);
         
         // Border
         ctx.strokeStyle = '#999';
@@ -88,7 +97,7 @@ class UI {
         ctx.fillText(`Level: ${level}`, x, y + 20);
         
         ctx.font = '14px Arial';
-        ctx.fillText(`Wolves: ${wolfCount}`, x, y + 45);
+        ctx.fillText(`Wolves: ${Math.max(0, wolfCount)}`, x, y + 45);
     }
     
     drawTimeOfDay(ctx, weather) {
@@ -100,10 +109,10 @@ class UI {
         ctx.fillText(`Time: ${weather.getTimeOfDay()}`, x, y + 20);
         
         ctx.font = '12px Arial';
-        ctx.fillText(`${weather.isDaytime ? '☀️ Day' : '🌙 Night'}`, x, y + 40);
+        ctx.fillText(`${weather.isNight() ? '🌙 Night' : '☀️ Day'}`, x, y + 40);
         
         if (weather.weatherType !== 'clear') {
-            ctx.fillText(`${weather.weatherType.toUpperCase()}`, x, y + 60);
+            ctx.fillText(`${weather.weatherType.charAt(0).toUpperCase() + weather.weatherType.slice(1)}`, x, y + 60);
         }
     }
     
@@ -139,7 +148,7 @@ class UI {
         
         if (weather.isNight()) {
             ctx.fillStyle = '#9999FF';
-            ctx.fillText('🌙 Night (Dark)', x, statusY);
+            ctx.fillText('🌙 Dark', x, statusY);
             ctx.fillStyle = '#FFF';
         }
     }

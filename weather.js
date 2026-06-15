@@ -8,9 +8,14 @@ class Weather {
         
         this.weatherType = 'clear'; // clear, rain, fog, snow
         this.weatherIntensity = 0; // 0-1
+        this.weatherChangeTimer = 0;
+        this.weatherChangeDuration = 30000; // 30 seconds
     }
     
     update(deltaTime) {
+        // Clamp deltaTime
+        deltaTime = Math.min(deltaTime, 0.033);
+        
         // Update time of day
         this.time += deltaTime / this.dayLength;
         if (this.time >= 1) {
@@ -18,19 +23,23 @@ class Weather {
         }
         
         // Calculate darkness (0 at noon, 1 at midnight)
-        // Using cosine wave for smooth transitions
-        this.isDaytime = this.time < 0.5;
-        const angle = this.time * Math.PI * 2;
-        this.darkness = Math.max(0, -Math.cos(angle)); // 0 at noon and midnight shifted
-        
-        // Simplify: darkness is 0 during day (0.25-0.75), 1 at night
         if (this.time < 0.25 || this.time > 0.75) {
-            this.darkness = Math.abs(this.time - 0.75) / 0.25;
-            if (this.time > 0.75) {
+            // Night time
+            if (this.time < 0.25) {
+                this.darkness = (0.25 - this.time) / 0.25;
+            } else {
                 this.darkness = (this.time - 0.75) / 0.25;
             }
         } else {
+            // Day time
             this.darkness = 0;
+        }
+        
+        // Update weather
+        this.weatherChangeTimer += deltaTime;
+        if (this.weatherChangeTimer >= this.weatherChangeDuration) {
+            this.randomWeatherChange();
+            this.weatherChangeTimer = 0;
         }
     }
     
