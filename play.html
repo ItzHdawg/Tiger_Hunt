@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐺 Tiger Escape - Play Now</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        canvas {
+            border: 3px solid #333;
+            background-color: #000;
+            image-rendering: pixelated;
+            cursor: none;
+            display: block;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        @media (max-width: 1024px) {
+            canvas {
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <script>
+        // Game Configuration
+        const CONFIG = {
+            CANVAS_WIDTH: 1200,
+            CANVAS_HEIGHT: 800,
+            PLAYER_SPEED: 150,
+            PLAYER_SPRINT_SPEED: 250,
+            PLAYER_ACCELERATION: 800,
+            PLAYER_DECELERATION: 600,
+            PLAYER_SIZE: 20,
+            WOLF_SPEED: 120,
+            WOLF_DETECTION_RANGE: 300,
+            WOLF_ATTACK_RANGE: 40,
+            WOLF_ATTACK_COOLDOWN: 1000,
+            WOLF_DAMAGE: 15,
+            WOLF_SIZE: 25,
+            WOLF_HEALTH: 20,
+            HUNGER_DECAY_RATE: 0.01,
+            THIRST_DECAY_RATE: 0.015,
+            STAMINA_DRAIN_RATE: 1.5,
+            STAMINA_REGEN_RATE: 0.5,
+            HUT_HEALING_RATE: 10,
+            HUT_HUNGER_RATE: 2,
+            HUT_THIRST_RATE: 2,
+            HUT_SIZE: 40,
+            WOLF_SPAWN_RATE: 1.5,
+            MAX_WOLVES: 20,
+            WORLD_WIDTH: 4800,
+            WORLD_HEIGHT: 3200,
+            DAY_LENGTH: 300000,
+            DEBUG_MODE: false
+        };
+
+        // Player Class
+        class Player {
+            constructor(x = 600, y = 400) {
+                this.x = x;
+                this.y = y;
+                this.vx = 0;
+                this.vy = 0;
+                this.speed = CONFIG.PLAYER_SPEED;
+                this.sprintSpeed = CONFIG.PLAYER_SPRINT_SPEED;
+                this.acceleration = CONFIG.PLAYER_ACCELERATION;
+                this.deceleration = CONFIG.PLAYER_DECELERATION;
+                this.size = CONFIG.PLAYER_SIZE;
+                this.isSprinting = false;
+                this.animationFrame = 0;
+                this.animationCounter = 0;
+                this.keys = { w: false, a: false, s: false, d: false, shift: false };
+            }
+
+            handleKeyDown(event) {
+                const key = event.key.toLowerCase();
+                if (key === 'w') this.keys.w = true;
+                if (key === 'a') this.keys.a = true;
+                if (key === 's') this.keys.s = true;
+                if (key === 'd') this.keys.d = true;
+                if (event.shiftKey) this.keys.shift = true;
+            }
+
+            handleKeyUp(event) {
+                const key = event.key.toLowerCase();
+                if (key === 'w') this.keys.w = false;
+                if (key === 'a') this.keys.a = false;
+                if (key === 's') this.keys.s = false;
+                if (key === 'd') this.keys.d = false;
+                if (!event.shiftKey) this.keys.shift = false;
+            }
+
+            update(deltaTime, survival) {
+                deltaTime = Math.min(deltaTime, 0.033);
+                this.isSprinting = this.keys.shift && survival.stamina > 0 && !survival.isExhausted;
+
+                let ax = 0, ay = 0;
+                if (this.keys.w) ay -= 1;
+                if (this.keys.s) ay += 1;
+                if (this.keys.a) ax -= 1;
+                if (this.keys.d) ax += 1;
+
+                if (ax !== 0 && ay !== 0) {
+                    ax *= 0.707;
+                    ay *= 0.707;
+                }
+
+                const targetSpeed = this.isSprinting ? this.sprintSpeed : this.speed;
+                this.vx += ax * this.acceleration * deltaTime;
+                this.vy += ay * this.acceleration * deltaTime;
+
+                if (ax === 0) {
+                    if (this.vx > 0) this.vx -= this.deceleration * deltaTime;
+                    if (this.vx < 0) this.vx += this.deceleration * deltaTime;
+                    if (Math.abs(this.vx) < 5) this.vx = 0;
+                }
+
+                if (ay === 0) {
+                    if (this.vy > 0) this.vy -= this.deceleration * deltaTime;
+                    if (this.vy < 0) this.vy += this.deceleration * deltaTime;
+                    if (Math.abs(this.vy) < 5) this.vy = 0;
+                }
+
+                const speed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
+                if (speed > targetSpeed) {
+                    const scale = targetSpeed / speed;
+                    this.vx *= scale;
+                    this.vy *= scale;
+                }
+
+                this.x += this.vx * deltaTime;
+                this.y += this.vy * deltaTime;
+
+                this.x = Math.max(this.size, Math.min(CONFIG.WORLD_WIDTH - this.size, this.x));
+                this.y = Math.max(this.size, Math.min(CONFIG.WORLD_HEIGHT - this.size, this.y));
+
+                this.animationCounter += deltaTime;
+                if (this.animationCounter > 0.1) {
+                    this.animationFrame = (this.animationFrame + 1) % 4;
+                    this.animationCounter = 0;
+                }
+            }
+
+            draw(ctx, cameraX, cameraY) {
+                const screenX = this.x - cameraX;
+                const screenY = this.y - cameraY;
+
+                ctx.fillStyle = '#FF6B6B';
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                const speed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
+                if (speed > 10) {
+                    const angle = Math.atan2(this.vy, this.vx);
+                    ctx.fillStyle = '#FF4444';
+                    ctx.save();
+                    ctx.translate(screenX, screenY);
+                    ctx.rotate(angle);
+                    ctx.fillRect(this.size / 2, -5, 15, 10);
+                    ctx.restore();
+                }
+            }
+        }
+
+        // Wolf Class
+        class Wolf {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = 0;
+                this.vy = 0;
+                this.speed = CONFIG.WOLF_SPEED;
+                this.size = CONFIG.WOLF_SIZE;
+                this.health = CONFIG.WOLF_HEALTH;
+                this.maxHealth = CONFIG.WOLF_HEALTH;
+                this.state = 'idle';
+                this.detectionRange = CONFIG.WOLF_DETECTION_RANGE;
+                this.attackRange = CONFIG.WOLF_ATTACK_RANGE;
+                this.attackCooldown = 0;
+            }
+
+            update(deltaTime, player) {
+                deltaTime = Math.min(deltaTime, 0.033);
+
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const distance = Math.sqrt(dx ** 2 + dy ** 2);
+
+                if (distance < this.detectionRange) {
+                    this.state = 'chasing';
+                } else {
+                    this.state = 'idle';
+                    this.vx = 0;
+                    this.vy = 0;
+                }
+
+                this.attackCooldown -= deltaTime;
+
+                if (this.state === 'chasing' && distance > 0) {
+                    const angle = Math.atan2(dy, dx);
+                    this.vx = Math.cos(angle) * this.speed;
+                    this.vy = Math.sin(angle) * this.speed;
+
+                    this.x += this.vx * deltaTime;
+                    this.y += this.vy * deltaTime;
+
+                    if (distance < this.attackRange && this.attackCooldown <= 0) {
+                        this.state = 'attacking';
+                        this.attackCooldown = CONFIG.WOLF_ATTACK_COOLDOWN / 1000;
+                        return 'attacking';
+                    }
+                }
+
+                this.x = Math.max(this.size, Math.min(CONFIG.WORLD_WIDTH - this.size, this.x));
+                this.y = Math.max(this.size, Math.min(CONFIG.WORLD_HEIGHT - this.size, this.y));
+
+                return null;
+            }
+
+            draw(ctx, cameraX, cameraY) {
+                const screenX = this.x - cameraX;
+                const screenY = this.y - cameraY;
+
+                ctx.fillStyle = '#4A4A4A';
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#FF4444';
+                ctx.beginPath();
+                ctx.arc(screenX - 8, screenY - 5, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 8, screenY - 5, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            isAlive() {
+                return this.health > 0;
+            }
+        }
+
+        // Survival Class
+        class Survival {
+            constructor() {
+                this.health = 100;
+                this.maxHealth = 100;
+                this.hunger = 50;
+                this.maxHunger = 100;
+                this.thirst = 50;
+                this.maxThirst = 100;
+                this.stamina = 100;
+                this.maxStamina = 100;
+                this.isAlive = true;
+                this.isExhausted = false;
+            }
+
+            update(deltaTime, player, inHut) {
+                if (!this.isAlive) return;
+
+                deltaTime = Math.min(deltaTime, 0.033);
+
+                this.hunger -= CONFIG.HUNGER_DECAY_RATE * deltaTime;
+                this.hunger = Math.max(0, this.hunger);
+
+                this.thirst -= CONFIG.THIRST_DECAY_RATE * deltaTime;
+                this.thirst = Math.max(0, this.thirst);
+
+                if (player.isSprinting && this.stamina > 0) {
+                    this.stamina -= CONFIG.STAMINA_DRAIN_RATE * deltaTime;
+                    this.stamina = Math.max(0, this.stamina);
+                } else {
+                    this.stamina += CONFIG.STAMINA_REGEN_RATE * deltaTime;
+                    this.stamina = Math.min(this.maxStamina, this.stamina);
+                }
+
+                this.isExhausted = this.stamina <= 0;
+
+                if (this.hunger <= 0) this.health -= 0.5 * deltaTime;
+                if (this.thirst <= 0) this.health -= 1 * deltaTime;
+
+                if (this.hunger > 0 && this.hunger < 20) this.health -= 0.2 * deltaTime;
+                if (this.thirst > 0 && this.thirst < 20) this.health -= 0.3 * deltaTime;
+
+                if (this.health <= 0) {
+                    this.isAlive = false;
+                    this.health = 0;
+                }
+            }
+
+            takeDamage(amount) {
+                if (!this.isAlive) return false;
+                this.health -= amount;
+                if (this.health <= 0) {
+                    this.isAlive = false;
+                    this.health = 0;
+                }
+                return !this.isAlive;
+            }
+        }
+
+        // Hut Class
+        class Hut {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = CONFIG.HUT_SIZE;
+                this.isActive = false;
+            }
+
+            checkPlayerInside(player) {
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const distance = Math.sqrt(dx ** 2 + dy ** 2);
+                this.isActive = distance < this.size + player.size;
+                return this.isActive;
+            }
+
+            draw(ctx, cameraX, cameraY) {
+                const screenX = this.x - cameraX;
+                const screenY = this.y - cameraY;
+
+                ctx.fillStyle = this.isActive ? '#FFD700' : '#8B4513';
+                ctx.fillRect(screenX - this.size, screenY - this.size, this.size * 2, this.size * 2);
+
+                ctx.fillStyle = this.isActive ? '#FFA500' : '#654321';
+                ctx.beginPath();
+                ctx.moveTo(screenX - this.size, screenY - this.size);
+                ctx.lineTo(screenX + this.size, screenY - this.size);
+                ctx.lineTo(screenX, screenY - this.size * 1.5);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#333';
+                ctx.fillRect(screenX - 10, screenY, 20, 30);
+            }
+        }
+
+        // Game Class
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.canvas.width = CONFIG.CANVAS_WIDTH;
+                this.canvas.height = CONFIG.CANVAS_HEIGHT;
+
+                this.player = new Player();
+                this.survival = new Survival();
+                this.wolves = [];
+                this.huts = [
+                    new Hut(600, 400), new Hut(1200, 800), new Hut(300, 1200),
+                    new Hut(900, 1600), new Hut(1500, 600), new Hut(2400, 1200),
+                    new Hut(300, 2400), new Hut(2100, 2400)
+                ];
+
+                this.isRunning = true;
+                this.lastFrameTime = Date.now();
+                this.fps = 0;
+                this.frameCount = 0;
+                this.inHut = false;
+                this.spawnTimer = 0;
+                this.spawnRate = CONFIG.WOLF_SPAWN_RATE;
+                this.level = 1;
+
+                window.addEventListener('keydown', (e) => this.handleKeyDown(e));
+                window.addEventListener('keyup', (e) => this.handleKeyUp(e));
+
+                this.gameLoop();
+            }
+
+            handleKeyDown(event) {
+                this.player.handleKeyDown(event);
+                if (event.key === 'D' || event.key === 'd') {
+                    CONFIG.DEBUG_MODE = !CONFIG.DEBUG_MODE;
+                }
+            }
+
+            handleKeyUp(event) {
+                this.player.handleKeyUp(event);
+            }
+
+            update(deltaTime) {
+                if (!this.isRunning) return;
+
+                this.player.update(deltaTime, this.survival);
+                this.survival.update(deltaTime, this.player, this.inHut);
+
+                // Spawn wolves
+                this.spawnTimer += deltaTime;
+                if (this.spawnTimer >= this.spawnRate && this.wolves.length < CONFIG.MAX_WOLVES) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = CONFIG.WOLF_DETECTION_RANGE + 100;
+                    const x = this.player.x + Math.cos(angle) * distance;
+                    const y = this.player.y + Math.sin(angle) * distance;
+                    const wolf = new Wolf(x, y);
+                    wolf.speed = CONFIG.WOLF_SPEED + (this.level - 1) * 20;
+                    this.wolves.push(wolf);
+                    this.spawnTimer = 0;
+                }
+
+                // Update wolves
+                for (let i = this.wolves.length - 1; i >= 0; i--) {
+                    if (this.wolves[i]) {
+                        this.wolves[i].update(deltaTime, this.player);
+                    }
+                }
+
+                // Check wolf attacks
+                for (let wolf of this.wolves) {
+                    if (!wolf) continue;
+                    const dx = this.player.x - wolf.x;
+                    const dy = this.player.y - wolf.y;
+                    const distance = Math.sqrt(dx ** 2 + dy ** 2);
+
+                    if (distance < (this.player.size + wolf.size)) {
+                        this.survival.takeDamage(CONFIG.WOLF_DAMAGE);
+                    }
+                }
+
+                // Check huts
+                this.inHut = false;
+                for (let hut of this.huts) {
+                    if (hut.checkPlayerInside(this.player)) {
+                        this.inHut = true;
+                        this.survival.health = Math.min(100, this.survival.health + CONFIG.HUT_HEALING_RATE * 0.016);
+                        this.survival.hunger = Math.min(100, this.survival.hunger + CONFIG.HUT_HUNGER_RATE * 0.016);
+                        this.survival.thirst = Math.min(100, this.survival.thirst + CONFIG.HUT_THIRST_RATE * 0.016);
+                        this.survival.stamina = Math.min(100, this.survival.stamina + 2 * 0.016);
+                    }
+                }
+
+                if (!this.survival.isAlive) {
+                    this.isRunning = false;
+                }
+            }
+
+            render() {
+                const cameraX = this.player.x - this.canvas.width / 2;
+                const cameraY = this.player.y - this.canvas.height / 2;
+                const clampedCameraX = Math.max(0, Math.min(CONFIG.WORLD_WIDTH - this.canvas.width, cameraX));
+                const clampedCameraY = Math.max(0, Math.min(CONFIG.WORLD_HEIGHT - this.canvas.height, cameraY));
+
+                this.ctx.fillStyle = '#2a5a2a';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Draw grid
+                this.ctx.strokeStyle = 'rgba(100, 100, 100, 0.1)';
+                this.ctx.lineWidth = 1;
+                const gridSize = 100;
+                for (let x = 0; x < this.canvas.width; x += gridSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, 0);
+                    this.ctx.lineTo(x, this.canvas.height);
+                    this.ctx.stroke();
+                }
+                for (let y = 0; y < this.canvas.height; y += gridSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, y);
+                    this.ctx.lineTo(this.canvas.width, y);
+                    this.ctx.stroke();
+                }
+
+                // Draw entities
+                for (let hut of this.huts) {
+                    hut.draw(this.ctx, clampedCameraX, clampedCameraY);
+                }
+                for (let wolf of this.wolves) {
+                    if (wolf) wolf.draw(this.ctx, clampedCameraX, clampedCameraY);
+                }
+                this.player.draw(this.ctx, clampedCameraX, clampedCameraY);
+
+                // Draw UI
+                this.drawUI();
+            }
+
+            drawUI() {
+                const ctx = this.ctx;
+                const padding = 15;
+                const barWidth = 150;
+                const barHeight = 20;
+
+                // Stats bars
+                this.drawBar(ctx, padding, padding, barWidth, barHeight, this.survival.health / 100, '#FF6B6B', 'Health');
+                this.drawBar(ctx, padding, padding + 35, barWidth, barHeight, this.survival.hunger / 100, '#FFD700', 'Hunger');
+                this.drawBar(ctx, padding, padding + 70, barWidth, barHeight, this.survival.thirst / 100, '#4A90E2', 'Thirst');
+                this.drawBar(ctx, padding, padding + 105, barWidth, barHeight, this.survival.stamina / 100, '#7ED321', 'Stamina');
+
+                // Level and wolves
+                ctx.fillStyle = '#FFF';
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText(`Level: ${this.level}`, this.canvas.width - 200, padding + 20);
+                ctx.font = '14px Arial';
+                ctx.fillText(`Wolves: ${this.wolves.filter(w => w && w.isAlive()).length}`, this.canvas.width - 200, padding + 45);
+
+                // Game Over
+                if (!this.survival.isAlive) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    ctx.fillStyle = '#FF4444';
+                    ctx.font = 'bold 60px Arial';
+                    ctx.fillText('GAME OVER', this.canvas.width / 2 - 150, this.canvas.height / 2);
+                    ctx.fillStyle = '#FFF';
+                    ctx.font = '20px Arial';
+                    ctx.fillText('Refresh page to play again', this.canvas.width / 2 - 150, this.canvas.height / 2 + 60);
+                }
+            }
+
+            drawBar(ctx, x, y, width, height, percentage, color, label) {
+                percentage = Math.max(0, Math.min(1, percentage));
+                ctx.fillStyle = '#333';
+                ctx.fillRect(x, y, width, height);
+                ctx.fillStyle = color;
+                ctx.fillRect(x, y, width * percentage, height);
+                ctx.strokeStyle = '#999';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, width, height);
+                ctx.fillStyle = '#FFF';
+                ctx.font = 'bold 12px Arial';
+                ctx.fillText(label, x + 5, y + height / 2 + 4);
+            }
+
+            gameLoop() {
+                const now = Date.now();
+                const deltaTime = Math.min((now - this.lastFrameTime) / 1000, 0.033);
+                this.lastFrameTime = now;
+
+                this.frameCount++;
+                if (this.frameCount % 60 === 0) {
+                    this.fps = 1 / (deltaTime > 0 ? deltaTime : 0.016);
+                }
+
+                this.update(deltaTime);
+                this.render();
+
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+
+        // Start game
+        window.addEventListener('load', () => {
+            new Game();
+        });
+    </script>
+</body>
+</html>
